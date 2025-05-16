@@ -19,7 +19,7 @@ jobs:            # Определение jobs (задач)
       # Шаг 3: Установка зависимостей backend
       - name: Install backend dependencies
         run: |  # Многострочная команда
-          cd backend  # Переход в папку backend
+          cd laba4/backend  # Переход в папку backend
           npm install # Установка зависимостей
       
       # Шаг 4: Запуск тестов backend
