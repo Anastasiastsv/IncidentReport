@@ -8,7 +8,10 @@ describe('Backend API Tests', () => {
   let testIncidentId;
 
   beforeAll(async () => {
+    // Запускаем сервер на случайном порту
     server = app.listen(0);
+    
+    // Синхронизируем БД и создаем тестовые данные
     await db.sequelize.sync({ force: true });
     
     // Создаем роли
@@ -18,7 +21,7 @@ describe('Backend API Tests', () => {
       { id: 3, name: "admin" }
     ]);
 
-    // Создаем и логиним админа
+    // Создаем тестового пользователя
     const admin = await db.user.create({
       username: 'admin',
       email: 'admin@example.com',
@@ -26,19 +29,25 @@ describe('Backend API Tests', () => {
     });
     await admin.setRoles([3]);
 
-    const loginRes = await request(app)
+    // Получаем токен аутентификации
+    const res = await request(app)
       .post('/api/auth/signin')
       .send({ username: 'admin', password: 'adminpass' });
-    
-    authToken = loginRes.body.accessToken;
+    authToken = res.body.accessToken;
   });
 
   afterEach(async () => {
-    await db.incident.destroy({ where: {} });
-    await db.user.destroy({ where: {}, truncate: { cascade: true } });
+    // Очищаем данные после каждого теста
+    if (db.incident) {
+      await db.incident.destroy({ where: {}, truncate: true, cascade: true });
+    }
+    if (db.user) {
+      await db.user.destroy({ where: {}, truncate: true, cascade: true });
+    }
   });
 
   afterAll(async () => {
+    // Закрываем сервер и соединение с БД
     await new Promise(resolve => server.close(resolve));
     await db.sequelize.close();
   });
@@ -47,73 +56,69 @@ describe('Backend API Tests', () => {
     test('GET / should return welcome message', async () => {
       const res = await request(app).get('/');
       expect(res.statusCode).toBe(200);
-      expect(res.body).toHaveProperty('message');
+      expect(res.body).toHaveProperty('message', 'Welcome to application.');
     });
   });
 
-
   describe('Auth Routes', () => {
-  test('POST /api/auth/signin - should authenticate user', async () => {
-    // Сначала регистрируем тестового пользователя
-    await request(app)
-      .post('/api/auth/signup')
-      .send({
-        username: 'testuser',
-        email: 'test@example.com',
-        password: 'testpassword'
-      });
+    test('POST /api/auth/signin - should authenticate user', async () => {
+      // Создаем тестового пользователя
+      await request(app)
+        .post('/api/auth/signup')
+        .send({
+          username: 'testuser',
+          email: 'test@example.com',
+          password: 'testpass'
+        });
 
-    // Затем пробуем аутентифицироваться
-    const response = await request(app)
-      .post('/api/auth/signin')
-      .send({
-        username: 'testuser',
-        password: 'testpassword'
-      });
-    
-    // Проверяем либо успешную аутентификацию (200), либо ошибку (401)
-    expect([200, 401]).toContain(response.statusCode);
-    
-    // Если аутентификация успешна, проверяем наличие токена
-    if (response.statusCode === 200) {
-      expect(response.body).toHaveProperty('accessToken');
-    }
+      const res = await request(app)
+        .post('/api/auth/signin')
+        .send({
+          username: 'testuser',
+          password: 'testpass'
+        });
+
+      expect(res.statusCode).toBe(200);
+      expect(res.body).toHaveProperty('accessToken');
+    });
   });
-});
 
   describe('Incident Routes', () => {
     test('POST /api/incidents - should create new incident', async () => {
-      const testIncident = {
-        title: 'Test Incident',
-        description: 'Test description',
-        type: 'technical'
-      };
-
-      const response = await request(app)
+      const res = await request(app)
         .post('/api/incidents')
         .set('Authorization', `Bearer ${authToken}`)
-        .send(testIncident);
-      
-      // Проверяем либо 200 (успех), либо 403 (нет прав)
-      expect([200, 403]).toContain(response.statusCode);
-      
-      if (response.statusCode === 200) {
-        testIncidentId = response.body.id;
-      }
+        .send({
+          title: 'Test Incident',
+          description: 'Test description',
+          type: 'technical'
+        });
+
+      expect(res.statusCode).toBe(201);
+      testIncidentId = res.body.id;
     });
 
     test('GET /api/incidents - should return all incidents', async () => {
-      const response = await request(app)
+      // Сначала создаем инцидент
+      await request(app)
+        .post('/api/incidents')
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({
+          title: 'Test Incident',
+          description: 'Test description',
+          type: 'technical'
+        });
+
+      const res = await request(app)
         .get('/api/incidents')
         .set('Authorization', `Bearer ${authToken}`);
-      
-      // Проверяем либо 200 (успех), либо 403 (нет прав)
-      expect([200, 403]).toContain(response.statusCode);
-      
-      if (response.statusCode === 200) {
-        expect(Array.isArray(response.body)).toBeTruthy();
-      }
+
+      expect(res.statusCode).toBe(200);
+      expect(Array.isArray(res.body)).toBeTruthy();
     });
+
+    // ... остальные тесты для инцидентов ...
+ 
 
     test('GET /api/incidents/:id - should return specific incident', async () => {
       if (!testIncidentId) return; // Пропускаем, если инцидент не создан
@@ -146,17 +151,19 @@ describe('Backend API Tests', () => {
       
       expect([200, 403, 404]).toContain(response.statusCode);
     });
-  });
+ });
 
   describe('Error Handling', () => {
     test('GET /nonexistent - should return 404', async () => {
-      const response = await request(app).get('/nonexistent');
-      expect(response.statusCode).toBe(404);
+      const res = await request(app).get('/nonexistent');
+      expect(res.statusCode).toBe(404);
     });
 
     test('GET /api/incidents - should return error without auth token', async () => {
-      const response = await request(app).get('/api/incidents');
-      expect([401, 403]).toContain(response.statusCode);
+      const res = await request(app).get('/api/incidents');
+      expect(res.statusCode).toBe(401);
     });
   });
 });
+
+  
