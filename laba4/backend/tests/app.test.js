@@ -1,6 +1,7 @@
 const request = require('supertest');
 const app = require('../server');
 const db = require("../app/models");
+const bcrypt = require('bcryptjs');
 
 describe('Backend API Tests', () => {
   let server;
@@ -9,7 +10,10 @@ describe('Backend API Tests', () => {
   let testIncidentId;
 
   beforeAll(async () => {
+    // Запускаем сервер на случайном порту
     server = app.listen(0);
+    
+    // Полная пересоздание БД
     await db.sequelize.sync({ force: true });
     
     // Создаем роли
@@ -19,11 +23,15 @@ describe('Backend API Tests', () => {
       { id: 3, name: "admin" }
     ]);
 
+    // Хешируем пароли
+    const userPassword = bcrypt.hashSync('testpass', 8);
+    const adminPassword = bcrypt.hashSync('adminpass', 8);
+
     // Создаем тестового пользователя
     const user = await db.user.create({
       username: 'testuser',
       email: 'user@example.com',
-      password: '$2a$08$kMeLcB8iK7D5R7JZ5Yz5NuYQY8SJQ5b5Zn5J5Y5Y5Y5Y5Y5Y5Y5Y5' // Хеш для 'testpass'
+      password: userPassword
     });
     await user.setRoles([1]);
 
@@ -31,7 +39,7 @@ describe('Backend API Tests', () => {
     const admin = await db.user.create({
       username: 'admin',
       email: 'admin@example.com',
-      password: '$2a$08$kMeLcB8iK7D5R7JZ5Yz5NuYQY8SJQ5b5Zn5J5Y5Y5Y5Y5Y5Y5Y5' // Хеш для 'adminpass'
+      password: adminPassword
     });
     await admin.setRoles([3]);
 
@@ -39,12 +47,20 @@ describe('Backend API Tests', () => {
     const userRes = await request(app)
       .post('/api/auth/signin')
       .send({ username: 'testuser', password: 'testpass' });
+    
+    if (userRes.status !== 200) {
+      console.error('User auth failed:', userRes.body);
+    }
     userToken = userRes.body.accessToken;
 
     // Получаем токен администратора
     const adminRes = await request(app)
       .post('/api/auth/signin')
       .send({ username: 'admin', password: 'adminpass' });
+    
+    if (adminRes.status !== 200) {
+      console.error('Admin auth failed:', adminRes.body);
+    }
     adminToken = adminRes.body.accessToken;
   });
 
@@ -91,8 +107,12 @@ describe('Backend API Tests', () => {
           type: 'technical'
         });
 
-      if (res.statusCode === 403) {
-        console.log('POST /api/incidents 403 Response:', res.body);
+      if (res.status !== 201) {
+        console.error('Failed to create incident:', {
+          status: res.status,
+          body: res.body,
+          headers: res.headers
+        });
       }
 
       expect(res.statusCode).toBe(201);
@@ -100,16 +120,26 @@ describe('Backend API Tests', () => {
     });
 
     test('GET /api/incidents - should return all incidents (authorized)', async () => {
+      // Сначала создаем инцидент, если еще не создан
+      if (!testIncidentId) {
+        const createRes = await request(app)
+          .post('/api/incidents')
+          .set('Authorization', `Bearer ${adminToken}`)
+          .send({
+            title: 'Test Incident 2',
+            description: 'Test description 2',
+            type: 'technical'
+          });
+        testIncidentId = createRes.body.id;
+      }
+
       const res = await request(app)
         .get('/api/incidents')
         .set('Authorization', `Bearer ${userToken}`);
 
-      if (res.statusCode === 403) {
-        console.log('GET /api/incidents 403 Response:', res.body);
-      }
-
       expect(res.statusCode).toBe(200);
       expect(Array.isArray(res.body)).toBe(true);
+      expect(res.body.length).toBeGreaterThan(0);
     });
 
     test('GET /api/incidents/:id - should return specific incident (authorized)', async () => {
