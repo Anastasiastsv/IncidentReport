@@ -25,7 +25,7 @@ jobs:            # Определение jobs (задач)
       # Шаг 4: Запуск тестов backend
       - name: Run backend tests
         run: |
-          cd backend
+          cd laba4/backend
           npm test  # Запуск тестов (должен быть прописан в package.json)
       
       # Шаг 5: Установка зависимостей frontend
