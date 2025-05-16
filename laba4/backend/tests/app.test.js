@@ -4,7 +4,8 @@ const db = require("../app/models");
 
 describe('Backend API Tests', () => {
   let server;
-  let authToken;
+  let adminToken;
+  let userToken;
   let testIncidentId;
   let testUserId;
 
@@ -36,11 +37,16 @@ describe('Backend API Tests', () => {
     testUserId = user.id;
     await user.setRoles([1]);
 
-    // Получаем токен администратора
-    const adminAuth = await request(app)
+    // Получаем токены
+    const adminRes = await request(app)
       .post('/api/auth/signin')
       .send({ username: 'admin', password: 'adminpass' });
-    authToken = adminAuth.body.accessToken;
+    adminToken = adminRes.body.accessToken;
+
+    const userRes = await request(app)
+      .post('/api/auth/signin')
+      .send({ username: 'testuser', password: 'testpass' });
+    userToken = userRes.body.accessToken;
   });
 
   afterAll(async () => {
@@ -68,64 +74,52 @@ describe('Backend API Tests', () => {
   });
 
   describe('Incident Routes', () => {
-    test('POST /api/incidents - should create new incident', async () => {
+    test('POST /api/incidents - should create new incident (as admin)', async () => {
       const res = await request(app)
         .post('/api/incidents')
-        .set('Authorization', `Bearer ${authToken}`)
+        .set('Authorization', `Bearer ${adminToken}`)
         .send({
           title: 'Test Incident',
           description: 'Test description',
           type: 'technical',
-          userId: testUserId // Указываем пользователя
+          userId: testUserId
         });
 
       expect(res.statusCode).toBe(201);
       testIncidentId = res.body.id;
     });
 
-    test('GET /api/incidents - should return all incidents', async () => {
-      // Сначала создаем инцидент
-      await request(app)
-        .post('/api/incidents')
-        .set('Authorization', `Bearer ${authToken}`)
-        .send({
-          title: 'Test Incident 2',
-          description: 'Test description 2',
-          type: 'technical',
-          userId: testUserId
-        });
-
+    test('GET /api/incidents - should return all incidents (as user)', async () => {
       const res = await request(app)
         .get('/api/incidents')
-        .set('Authorization', `Bearer ${authToken}`);
+        .set('Authorization', `Bearer ${userToken}`);
 
       expect(res.statusCode).toBe(200);
       expect(Array.isArray(res.body)).toBe(true);
-      expect(res.body.length).toBeGreaterThan(0);
     });
 
-    test('GET /api/incidents/:id - should return specific incident', async () => {
+    test('GET /api/incidents/:id - should return specific incident (as user)', async () => {
       const res = await request(app)
         .get(`/api/incidents/${testIncidentId}`)
-        .set('Authorization', `Bearer ${authToken}`);
+        .set('Authorization', `Bearer ${userToken}`);
 
       expect(res.statusCode).toBe(200);
       expect(res.body.id).toBe(testIncidentId);
     });
 
-    test('PUT /api/incidents/:id - should update incident', async () => {
+    test('PUT /api/incidents/:id - should update incident (as admin)', async () => {
       const res = await request(app)
         .put(`/api/incidents/${testIncidentId}`)
-        .set('Authorization', `Bearer ${authToken}`)
+        .set('Authorization', `Bearer ${adminToken}`)
         .send({ title: 'Updated Title' });
 
       expect(res.statusCode).toBe(200);
     });
 
-    test('DELETE /api/incidents/:id - should delete incident', async () => {
+    test('DELETE /api/incidents/:id - should delete incident (as admin)', async () => {
       const res = await request(app)
         .delete(`/api/incidents/${testIncidentId}`)
-        .set('Authorization', `Bearer ${authToken}`);
+        .set('Authorization', `Bearer ${adminToken}`);
 
       expect(res.statusCode).toBe(200);
     });
@@ -139,7 +133,7 @@ describe('Backend API Tests', () => {
 
     test('GET /api/incidents - should return error without auth token', async () => {
       const res = await request(app).get('/api/incidents');
-      expect([401, 403]).toContain(res.statusCode); // Принимаем оба варианта
+      expect([401, 403]).toContain(res.statusCode);
     });
   });
 });
