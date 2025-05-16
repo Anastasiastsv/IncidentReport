@@ -37,7 +37,7 @@ describe('Backend API Tests', () => {
     await user.setRoles([1]);
     await admin.setRoles([3]);
 
-    const secret = 'your-secret-key'; // Должен совпадать с config/auth.config.js
+    const secret = 'tsvelodubova-secret-key'; // Должен совпадать с config/auth.config.js
     adminToken = jwt.sign({ id: admin.id, roles: ['admin'] }, secret);
     userToken = jwt.sign({ id: user.id, roles: ['user'] }, secret);
   });
