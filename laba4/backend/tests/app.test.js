@@ -47,13 +47,23 @@ describe('Backend API Tests', () => {
       admin.setRoles([3])
     ]);
 
-    // Генерируем токены вручную
-    adminToken = jwt.sign({ id: admin.id }, 'your-secret-key', { expiresIn: '1h' });
-    userToken = jwt.sign({ id: user.id }, 'your-secret-key', { expiresIn: '1h' });
+    // Генерируем токены вручную с правильным секретным ключом
+    const secret = 'your-secret-key'; // ДОЛЖЕН СОВПАДАТЬ С КОНФИГОМ!
+    adminToken = jwt.sign({ 
+      id: admin.id, 
+      roles: ['admin'],
+      username: admin.username
+    }, secret, { expiresIn: '1h' });
+    
+    userToken = jwt.sign({ 
+      id: user.id,
+      roles: ['user'],
+      username: user.username
+    }, secret, { expiresIn: '1h' });
   });
 
   afterAll(async () => {
-    await new Promise(resolve => server.close(resolve));
+    await server.close();
     await db.sequelize.close();
   });
 
@@ -66,7 +76,7 @@ describe('Backend API Tests', () => {
   });
 
   describe('Auth Routes', () => {
-    test('POST /api/auth/signin - should authenticate user with correct credentials', async () => {
+    test('POST /api/auth/signin - should authenticate user', async () => {
       const res = await request(app)
         .post('/api/auth/signin')
         .send({ username: 'testuser', password: 'testpass' });
@@ -86,21 +96,23 @@ describe('Backend API Tests', () => {
 
   describe('Incident Routes', () => {
     test('POST /api/incidents - should create new incident (admin only)', async () => {
+      const testIncident = {
+        title: 'Test Incident',
+        description: 'Test description',
+        type: 'technical'
+      };
+
       const res = await request(app)
         .post('/api/incidents')
         .set('Authorization', `Bearer ${adminToken}`)
-        .send({
-          title: 'Test Incident',
-          description: 'Test description',
-          type: 'technical'
-        });
+        .send(testIncident);
 
       expect(res.statusCode).toBe(201);
       testIncidentId = res.body.id;
     });
 
-    test('GET /api/incidents - should return all incidents (authorized)', async () => {
-      // Создаем инцидент, если предыдущий не создался
+    test('GET /api/incidents - should return all incidents', async () => {
+      // Если инцидент не создан в предыдущем тесте
       if (!testIncidentId) {
         const createRes = await request(app)
           .post('/api/incidents')
@@ -122,7 +134,7 @@ describe('Backend API Tests', () => {
       expect(res.body.length).toBeGreaterThan(0);
     });
 
-    test('GET /api/incidents/:id - should return specific incident (authorized)', async () => {
+    test('GET /api/incidents/:id - should return specific incident', async () => {
       if (!testIncidentId) {
         console.warn('Skipping test - no incident created');
         return;
@@ -136,7 +148,7 @@ describe('Backend API Tests', () => {
       expect(res.body.id).toBe(testIncidentId);
     });
 
-    test('PUT /api/incidents/:id - should update incident (admin only)', async () => {
+    test('PUT /api/incidents/:id - should update incident', async () => {
       if (!testIncidentId) {
         console.warn('Skipping test - no incident created');
         return;
@@ -150,7 +162,7 @@ describe('Backend API Tests', () => {
       expect(res.statusCode).toBe(200);
     });
 
-    test('DELETE /api/incidents/:id - should delete incident (admin only)', async () => {
+    test('DELETE /api/incidents/:id - should delete incident', async () => {
       if (!testIncidentId) {
         console.warn('Skipping test - no incident created');
         return;
