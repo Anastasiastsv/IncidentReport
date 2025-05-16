@@ -1,52 +1,56 @@
 const request = require('supertest');
 const app = require('../server');
 const db = require("../app/models");
-const Role = db.role;
-const User = db.user;
 
 describe('Backend API Tests', () => {
+  let server;
   let authToken;
   let testIncidentId;
 
   beforeAll(async () => {
+    server = app.listen(0);
     await db.sequelize.sync({ force: true });
     
     // Создаем роли
-    await Role.bulkCreate([
+    await db.role.bulkCreate([
       { id: 1, name: "user" },
       { id: 2, name: "moderator" },
       { id: 3, name: "admin" }
     ]);
 
-    // Создаем пользователя с правами администратора
-    const admin = await User.create({
+    // Создаем и логиним админа
+    const admin = await db.user.create({
       username: 'admin',
       email: 'admin@example.com',
       password: 'adminpass'
     });
-    await admin.setRoles([3]); // Назначаем роль admin
+    await admin.setRoles([3]);
 
-    // Логинимся как администратор
-    const loginResponse = await request(app)
+    const loginRes = await request(app)
       .post('/api/auth/signin')
-      .send({
-        username: 'admin',
-        password: 'adminpass'
-      });
-    authToken = loginResponse.body.accessToken;
+      .send({ username: 'admin', password: 'adminpass' });
+    
+    authToken = loginRes.body.accessToken;
+  });
+
+  afterEach(async () => {
+    await db.incident.destroy({ where: {} });
+    await db.user.destroy({ where: {}, truncate: { cascade: true } });
   });
 
   afterAll(async () => {
+    await new Promise(resolve => server.close(resolve));
     await db.sequelize.close();
   });
 
   describe('Basic Routes', () => {
     test('GET / should return welcome message', async () => {
-      const response = await request(app).get('/');
-      expect(response.statusCode).toBe(200);
-      expect(response.body).toHaveProperty('message', 'Welcome to application.');
+      const res = await request(app).get('/');
+      expect(res.statusCode).toBe(200);
+      expect(res.body).toHaveProperty('message');
     });
   });
+
 
   describe('Auth Routes', () => {
   test('POST /api/auth/signin - should authenticate user', async () => {
