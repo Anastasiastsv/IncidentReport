@@ -83,7 +83,7 @@ app.use((err, req, res, next) => {
   logger.error(err.stack);
   res.status(500).send('Something broke!');
 });
-
+module.exports = app; // Экспортируем app для тестов
 // Установка порта и прослушивание запросов
 const PORT = process.env.PORT || 8080;
 app.listen(PORT, () => {

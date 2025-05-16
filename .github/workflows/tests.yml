@@ -1,0 +1,42 @@
+name: Run Tests  # Название workflow (видно в интерфейсе GitHub)
+on: [push]       # Триггер: запускать при каждом push в репозиторий
+
+jobs:            # Определение jobs (задач)
+  test:          # ID задачи (можно любое название)
+    runs-on: windows-latest  # ОС для выполнения (Windows Server)
+    
+    steps:       # Последовательность шагов
+    
+      # Шаг 1: Получить код из репозитория
+      - uses: actions/checkout@v2  # Стандартное действие для клонирования репозитория
+      
+      # Шаг 2: Установить Node.js
+      - name: Set up Node.js  # Название шага (для логов)
+        uses: actions/setup-node@v2  # Официальное действие для Node
+        with:  # Параметры
+          node-version: '16'  # Версия Node.js
+      
+      # Шаг 3: Установка зависимостей backend
+      - name: Install backend dependencies
+        run: |  # Многострочная команда
+          cd backend  # Переход в папку backend
+          npm install # Установка зависимостей
+      
+      # Шаг 4: Запуск тестов backend
+      - name: Run backend tests
+        run: |
+          cd backend
+          npm test  # Запуск тестов (должен быть прописан в package.json)
+      
+      # Шаг 5: Установка зависимостей frontend
+      - name: Install frontend dependencies
+        run: |
+          cd laba4\frontend  # Обратите внимание на обратный слэш для Windows
+          npm install
+      
+      # Шаг 6: Запуск тестов frontend
+      - name: Run frontend tests
+        run: |
+          cd laba4\frontend
+          $env:CI = "true"  # Установка переменной окружения CI (для React)
+          npm test
