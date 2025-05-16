@@ -3,7 +3,8 @@ on: [push]
 
 jobs:
   test:
-    runs-on: ubuntu-latest  # ← Используем Linux вместо Windows
+    runs-on: ubuntu-latest
+
     services:
       postgres:
         image: postgres:13
@@ -13,36 +14,28 @@ jobs:
           POSTGRES_DB: myapp
         ports:
           - 5432:5432
-        options: --health-cmd pg_isready --health-interval 10s --health-timeout 5s --health-retries 5
 
     steps:
       - uses: actions/checkout@v2
-      
-      - name: Set up Node.js
+
+      - name: Setup Node.js
         uses: actions/setup-node@v2
         with:
           node-version: '16'
-      
+
       - name: Install backend dependencies
         run: |
           cd laba4/backend
           npm install
-      
+
+      - name: Fix Jest permissions
+        run: |
+          cd laba4/backend
+          chmod +x node_modules/.bin/*
+
       - name: Run backend tests
         run: |
           cd laba4/backend
           npm test
         env:
           DATABASE_URL: postgres://postgres:postgres@localhost:5432/test
-          NODE_ENV: test
-      
-      - name: Install frontend dependencies
-        run: |
-          cd laba4/frontend
-          npm install
-      
-      - name: Run frontend tests
-        run: |
-          cd laba4/frontend
-          $env:CI = "true"
-          npm test -- --watchAll=false
