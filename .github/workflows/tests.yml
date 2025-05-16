@@ -1,42 +1,49 @@
-name: Run Tests  # Название workflow (видно в интерфейсе GitHub)
-on: [push]       # Триггер: запускать при каждом push в репозиторий
+name: Run Tests
+on: [push]
 
-jobs:            # Определение jobs (задач)
-  test:          # ID задачи (можно любое название)
-    runs-on: windows-latest  # ОС для выполнения (Windows Server)
+jobs:
+  test:
+    runs-on: windows-latest
     
-    steps:       # Последовательность шагов
-    
-      # Шаг 1: Получить код из репозитория
-      - uses: actions/checkout@v2  # Стандартное действие для клонирования репозитория
+    services:
+      postgres:
+        image: postgres:13
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: myapp
+        ports:
+          - 5432:5432
+        options: --health-cmd pg_isready --health-interval 10s --health-timeout 5s --health-retries 5
+
+    steps:
+      - uses: actions/checkout@v2
       
-      # Шаг 2: Установить Node.js
-      - name: Set up Node.js  # Название шага (для логов)
-        uses: actions/setup-node@v2  # Официальное действие для Node
-        with:  # Параметры
-          node-version: '16'  # Версия Node.js
+      - name: Set up Node.js
+        uses: actions/setup-node@v2
+        with:
+          node-version: '16'
       
-      # Шаг 3: Установка зависимостей backend
       - name: Install backend dependencies
-        run: |  # Многострочная команда
-          cd laba4/backend  # Переход в папку backend
-          npm install # Установка зависимостей
+        run: |
+          cd laba4/backend
+          npm install
       
-      # Шаг 4: Запуск тестов backend
       - name: Run backend tests
         run: |
           cd laba4/backend
-          npm test  # Запуск тестов (должен быть прописан в package.json)
+          npm test
+        env:
+          DATABASE_URL: postgres://postgres:postgres@localhost:5432/test
+          NODE_ENV: test
       
-      # Шаг 5: Установка зависимостей frontend
       - name: Install frontend dependencies
         run: |
-          cd laba4\frontend  # Обратите внимание на обратный слэш для Windows
+          cd laba4/frontend
           npm install
       
-      # Шаг 6: Запуск тестов frontend
       - name: Run frontend tests
         run: |
-          cd laba4\frontend
-          $env:CI = "true"  # Установка переменной окружения CI (для React)
-          npm test
+          cd laba4/frontend
+          $env:CI = "true"
+          npm test -- --watchAll=false
