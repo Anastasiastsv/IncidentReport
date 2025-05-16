@@ -45,10 +45,8 @@ app.use(expressWinston.logger({
   ignoreRoute: function (req, res) { return false; }
 }));
 
-// Парсинг запросов с content-type application/json
+// Парсинг запросов
 app.use(express.json());
-
-// Парсинг запросов с content-type application/x-www-form-urlencoded
 app.use(express.urlencoded({ extended: true }));
 
 // Подключение маршрутов
@@ -57,20 +55,11 @@ require('./app/routes/user.routes')(app);
 require('./app/routes/incident.routes')(app);
 
 const db = require("./app/models");
-const Role = db.role;
 
 // Логирование ошибок
 app.use(expressWinston.errorLogger({
   winstonInstance: logger
 }));
-
-// Синхронизация базы данных
-db.sequelize.sync().then(() => {
-  logger.info('Database synchronized successfully.');
-  initial();
-}).catch(err => {
-  logger.error('Database synchronization failed:', err);
-});
 
 // Простой маршрут
 app.get("/", (req, res) => {
@@ -83,15 +72,40 @@ app.use((err, req, res, next) => {
   logger.error(err.stack);
   res.status(500).send('Something broke!');
 });
-module.exports = app; // Экспортируем app для тестов
-// Установка порта и прослушивание запросов
-const PORT = process.env.PORT || 8080;
-app.listen(PORT, () => {
-  logger.info(`Server is running on port ${PORT}.`);
-});
+
+// Экспортируем app для тестов
+module.exports = app;
+
+// Запуск сервера только при прямом вызове файла
+if (require.main === module) {
+  const PORT = process.env.PORT || 8080;
+  const server = app.listen(PORT, () => {
+    logger.info(`Server is running on port ${PORT}.`);
+  });
+
+  // Инициализация базы данных и ролей
+  db.sequelize.sync()
+    .then(() => {
+      logger.info('Database synchronized successfully.');
+      initializeRoles();
+    })
+    .catch(err => {
+      logger.error('Database synchronization failed:', err);
+    });
+
+  // Graceful shutdown
+  process.on('SIGTERM', () => {
+    server.close(() => {
+      logger.info('Server closed');
+      db.sequelize.close();
+    });
+  });
+}
 
 // Инициализация ролей
-function initial() {
+function initializeRoles() {
+  const Role = db.role;
+  
   Role.findOrCreate({
     where: { id: 1 },
     defaults: { name: "user" }
