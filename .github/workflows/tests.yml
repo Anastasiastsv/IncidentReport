@@ -3,8 +3,7 @@ on: [push]
 
 jobs:
   test:
-    runs-on: windows-latest
-    
+    runs-on: ubuntu-latest  # ← Используем Linux вместо Windows
     services:
       postgres:
         image: postgres:13
